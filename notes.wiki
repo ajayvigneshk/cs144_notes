@@ -1,0 +1,405 @@
+== four layer model==
+* application(http, bit torrent, guessing email, ssh), transport(TCP, UDP), network(IP),link(ethernet, wifi)
+* One layer builds over the other. Useful for reuse
+* link 
+  * responsible for moving packets across link(each link could be different) from source to destination
+* network
+  * datagram with source, dest addresses. Best effort. can be lost / out of sequennce
+  * If you want to use internet IP has to be used. Narrow waist.
+* Transport
+  * Builds on top of network by say having retries, sequencing the packets and such
+* Application
+  * app specific concerns.
+== IP ==
+* Simple, dumb. Doesn't do much
+* Tries to prevent packet looping
+* fragment the data into datagrams (based on link req)
+* Uses a header checksum to prevent delivery to wrong destination
+* 2 versions. Ipv4, Ipv6
+* Allows new fields to be added on header(mixed, open to extension, breaks compatibility)
+* Ip Datagram(32 bit array)
+  * Headers(not in order)
+    * Bit 0 -
+    * Dest ip addr.
+    * Source ip addr.
+    * Protocol id(nature of data (say tcp segment))
+    * Version - 4/6
+    * Total packet length
+    * TTL (128) (prevents looping)
+    * packetid, fragment offset, flags(fragment Ip packets)
+    * TOS( how important)
+    * Header checksum
+    * Header length 
+  * Data
+== Life of a packet ==
+* TCP ( 3 way handshake - SYN , SYN/ACK, ACK) - why?
+  * Shows using wireshark
+* Shows a demo of a packet from one IPaddr, TCP port (client) to another(server)
+  * Hops(traceroute)
+== Packet switching principle ==
+* Packet - self contained data to reach destination
+* Packet swtiching - break data into discrete self contained chunks
+* Each link with a table where key is destination address, value is the next link to be hopped to. So the source only needs to supply destination, not the route.
+===Consequences===
+* Simplifies packet forwarding(with no state)
+  * Flow: a collection of datagrams for the same e2e communication. e.g. a TCP connection
+  * packet switches doesn't need state for flow.
+* efficient sharing of links
+  * meaning there's no channel allocated per user that's wasted when not used.
+  * Data traffic is typically bursty. So when others are not using on a shared wifi, you get the maximum bandwidth
+  * Efficient sharing of bandwidth
+==Layering principle==
+* Hierarchical, communicate sequentially. Each layer provides a well-defined service(interface) to the one above using the ones below.
+* Separation of concerns. 
+* p2p is one of the benefits of layering??
+==Encapsulation==
+* Combination of layering and packet switching.
+* Ip packet has src, dest address. To send a TCP packet, we let TCP format IP packet. IP packet encapsulates TCP segment
+* [[file:./encapsulation.png]]
+* Transport enc ip enc network enc application. enc == encapsulates in the header 
+* why is there no encapsulation on the data and only on headers?
+* Encapsulation can be recursive (VPN)
+* [[file:./encapsulation_flexibility.png]]
+==byte order==
+* Multibyte values arrangement on memory that's typically byte spaced
+* Endianness
+  * Little (LSByte first)
+  * Big
+==error detection==
+* Easy to get errors along the route
+  * checksum
+  * CRC
+  * MAC
+* Ethernet appends CRC, TLS MAC (footer)
+* IP prepends checksum (header)
+===checksum===
+* One's complement
+* take 16 bit data segments, add, take one's complement => checksum
+* To check take 16 bit data segments add with checksum => should get 0xFF..
+* Can find only one bit errors
+* Can be easily done in software
+* Used by TCP, IP
+===CRC===
+* predefined number of bits for crc c<<n. Define a G(generator)
+* Divide M by G to get CRC.
+* M' + CRC / G should be zero.
+* Easy to implement at hardware
+* Used by ethernet
+* one in pow(2,c) chance of same CRC 
+===MAC===
+* Sender and receiver have shared secret
+* MAC(m,s) = c.
+* It's incredibly hard to generate MAC without secret
+* This is not a error detection scheme
+==Finite State machines==
+* [[file:./FSM_http.png]]
+* Mostly it's only the common scenario depicted (otherwise blowup of edges)
+* The event state combination has to be unique otherwise it's ambiguous
+* [[file:./TCP_FSM.png]]
+* Talks about TCP connection opening (SYN,SYN/ACK,ACK) and the associated transitions on client / server (CLOSE,SYNSENT,EST)(LISTEN,SYNRECV,EST)
+==Flow control==
+* Problem : Sender sending more packets than receiver can receive.
+* How it works? Recv gives feedback.
+* two approaches
+  * stop and wait
+  * sliding window(later discussed)
+===Stop and wait===
+* simple, sends one packet waits for ack. no ack resend. ack send another packet
+[[file:./Stop_and_wait_fsm.png]]
+* Stop and wait executions
+* [[file:./stop_and_wait_executions.png]]
+* NOTE: in the last case (ACK delay) the algorithm fails because the ACK could be due to the resent data / new data.
+* Solve this by using a counter for each packet (a simple 1 bit counter to start)
+* This assumes there are not multiple timeouts(can be solved by increasing the counter space)
+==recap==
+==transport (intro)==
+==TCP service model==
+* Used by 95% of internet
+* Creates a TCP segment that has the data.(that'll be encapsulated into an IP, Link)
+* There's a fin, ack from both A and B to signal completion
+* It's bidirectional, reliable stream of bytes(syn+ack implies b sends a syn as well)
+=== properties ===
+* Ensures in order delivery of packets / bytes by using sequence number
+* How's it reliable?
+  * ack, checksums, sequence number, flowcontrol
+* Congestion control (discuss later)
+  * tries to divide network capacity equally among all tcp connections
+== TCP segment format ==
+* Source port , destination port
+  * The initiator generates a unique combination of source + dest so that it's unique for each instance of connection from A to B (for the same service/app)
+* Sequence number
+* Ack sequence number (piggy backs ack on data segments)
+* checksum(header + data)
+* HLEN (header length)
+* flags
+  * ACK
+  * SYN
+  * FIN
+  * PSH (push)(don't wait to deliver data to app)
+* [[file:./TCP_Unique_id.png]] (it's 3 way only)
+  * The combination of source + destination port, IP SA, DA is unique globally
+  * The sequence numbering can be started off randomly to increase safety for global uniqueness
+* [[file:./TCP_Demuxing.png]]
+== UDP ==
+* Apps that don't need guarantee of reliable delivery
+* Format
+  * Header
+    * source + destination port
+    * length
+    * Checksum(optional)
+      * violates layering by including fields from IP layer(IP SA, DA) for error correction
+  * data
+=== properties ===
+* connectionless datagram service(no syn ack)
+* selfcontained datagram
+* No in order delivery. ( no sequence number)
+* unreliable delivery
+* dns,dhcp, ntp uses udp (that are simple request, response format)
+== ICP service model ==
+* Self contained message reporting error back
+  * e.g. destination unreachable (from router back to A, if the routing table doesn't have the forwarding router details for destination)
+* Unreliable(no ack / resend)
+* Technically it's above the network layer
+* ICMP message types
+  * Destination
+    * nw unreachable
+    * Host unreachable
+    * Port unreachable
+  * echo (used by ping)
+  * echo reply
+  * ttl (tracert)
+* Ping makes an ICMP(placed into an IP datagram) message request(echo request)
+  * the destination makes echo reply
+* traceroute - routers that a packet visits along the way
+  * Uses Udp message
+  * in the encapsulated ip datagram TTL is set to 1.
+    * gets an ICMP back from the first router.(getting the roundtrip time)
+    * repeat with increased TTL.(2) to get the next router on path
+      * How does it always go through the first router when ttl =2 ?
+  * chooses a random destination port so that dest unreachable can be used as termination condition.
+==end to end principle==
+* Network could do more like security, caching etc. but it doesn't? Because of  of e2e principle.
+* Things that are application specific can be correctly implemented for those applications and not the communication system
+* Motivation
+  * File transfer example
+  * Since there are error corrections in place in links, it was assumed that a file transfer through multiple computers should be fine
+  * But the memory that stores before retransmitting upstream could be buggy.
+  * So the need for e2e
+* TCP and reliability
+  * TCP works better with reliable networks
+  * TCP works better with link layer error correction particularly on wifi networks
+  * Note: TCP checks are still needed to satisfy e2e principle
+* Strong end-to-end
+  * network's job is transmit data efficiently and flexibly
+  * Everything else should be done at the ends.
+==Longest prefix match==
+* algorithm Used by routers to send across link
+| dest           | link |
+|----------------|------|
+| default        | 1    |
+| 172.168.0.0/16 | 2    |
+
+* Here a destination request to 172.168.1.1 gets forward to link 2. The most specific destination is always chosen, otherwise default.
+== ARP (Address resolution protocol) ==
+* ARP - network layer has an IP address asks what Link Address i should send it to?
+* Terms
+  * gateway - capable of forwarding packets across different network interfaces
+  * Subnet mask - Used to see if the destination IP address belongs to the same subnet or not (by ANDing)
+  * Link Address - Describes a particular network card. Ethernet 48 bits(6 bytes, colon seperated)
+* [[file:./gateway_addressing.png]] 
+  * Basically the gateway has different ip addresses for different network cards(different link addresses)
+* How does the source get the link address of the next hop ? - ARP.
+* Steps
+  * Who has network address X?
+    * request frame has sourceip(protocol address), source hardware address, destination ip, hardware type(ethernet) and some lengths
+    * this dataframe is included with source linkaddress, and destination set to broadcast (ff:ff:ff:ff:ff:ff)
+  * Reply: I have network address X(including its link address on the response)
+    * response is only from the capable node by itself
+* Request is a broadcast, reply need not be.
+* Upon request other nodes could update their cache for the sourceip:sourcelink 
+==Flow control(sliding window)==
+* Stop and wait is inefficient. 2 paramters bandwidth, RTT. with stop and wait, the bandwidth is heavily underutilized
+  * Eg. 10Mbps(Megabits), RTT 50ms. Ethernet frames : 12kb
+  * In one second with the above RTT can send 20 packets. 20*12kb = 240 kb is the upper limit on stop and wait, whereas the bw bottleneck is 10mbps.(2%)
+* Based on similar calculation, you can find the window (number) of packets that can be in flight at any point in time.
+  * With same values as above, you get 41 packets per round trip time 
+===Sliding window size===
+* Every segment has a sequence number
+* Maintains 3 vars
+  * Send window size(SWS)
+  * Last segment sent(LSS)
+  * Last ack received(LAR)
+* Invariant: SWS>= LSS - LAR
+* Similarly on the reciver side
+  * Receive window size(RWS)
+  * Last Segment recived (LSR)
+  * Last Acceptable segment(LAS)
+* Invariant: RWS>=LAS-LSR
+* if received packet is less than LAS send ack.
+* Acks are cumulative(in the basic scenario)
+* How does the guarantees of TCP maintained(in order delivery, resilience to failed delivery)?
+  * Cumulative ack. p2,p3,p4 are sent, p2,p4 are received. The ack sent is only p2.
+  * Sequence number has to be chosen to accordingly
+=== SWS, RWS, sequence space ===
+* SWS >= 1, RWS>=1, SWS>= RWS
+* If RWS =1 && SWS > 1 (go back protocol). Since the receiver cannot buffer, if a packet is dropped but others in SWS are sent, they are dropped on the receiver end. It requires SWS + 1 sequence numbers(similar to stop and wait accounting for 1 delay)
+* In general RWS+SWS sequence numbers are needed in minimum
+==retransmission strategies==
+* Environment
+  * n packets in flight at any point time
+  * Per packet timout
+  * Uses cumulative acks
+* How does the protocol behave on failures?
+  * Pessimistic / go back N- send entire window(from last ack) on one packet failure
+    * For eg. SWS =4, packet 2 is lost, send 2-5 aftertimeout
+  * Optimistic / selective repeat - send only one packet (assuming other packets have been sent )
+    * same scenario as above, send only 2, but continue sending 6,7,8,9
+      * 5 was sent as 1 was ackd
+      * Shouldn't 6 be sent only after ack5?  or not? Not very clear from diagram
+* Optimistic works poorly when there're burst of errors. since subsequent packets are sent individually on timeout
+* Pessimistic is redundant transmission when only parts of the data actually are lost.
+==TCP Header==
+* 20 bytes
+  * source, dest ports
+  * Sequence number(of the first data byte / packet, using window can calculate the range os seq numbers)
+    * Starting at zero (non-random) is some security issue
+  * ack number (from the receiver)(typically sent data+1)
+    * If unidirectional no data (only acks)
+    * If bi, acks + data sent from receiver
+  * checksum
+    * data - TCP (header+data) + Ip header; one's complement
+  * bits
+    * U - urgent; set then urgent pointer points in this segment where urgent data is set
+    * P - push
+    * A - ack; set to 1 if ack field (above) is valid; not set during handshake; otherwise set
+    * R - reset; need to reset
+    * Syn; setup; sync to this sequence number
+    * Fin; teardown; signal no more data to sent
+  * Offset ; offset after which data begins
+  * Options; size of options
+==TCP setup and teardown==
+* [[file:./TCP_3_and_4_way_handshake.png]] 
+* 4 way is possible when both sides attempt to initiate connection with a standard set of ports like p2p
+* [[file:./tcp_teardown.png]]
+* When can we teardown connection / delete state / reuse ports?
+  * What happens if final ack is lost in the network?
+  * same port pair if used immediately (and if seq number overlaps) data corruption can heppen
+* Solution: "TIME_WAIT", side sending fin first, wait a little while before reusing the state.(2 maximum segment lifetimes ~ 1 minutes)
+* Can cause issues on the server.
+* hacks: can send RST and delete the socket, set SO_LINGER to be 0
+* explains TCP FSM in detail (wrt teardown, connection establishment) and also using wireshark
+==recap(transport)(tcp)==
+* TCP
+* UDP
+* ICMP (send feedback if things are going wrong, for eg. it doesn't know where to send next)
+* e2e principle
+== packet switching ==
+=== intro ===
+=== history ===
+=== What's packet switching ===
+====circuit switching==== 
+* predecessor of packet switch
+* common use case is telephones(landlines)
+* telephone -> switching center(prev people) -> telephone 2
+  * each call creates a circuit(from physical to virtual)
+  * Isolated from others with guaranteed data rate
+  * Shortcomings(when thinking of using it for computers data):
+    * Inefficient: computers' data are bursty
+    * diverse rates: 
+    * state management
+==== packet switching ====
+* Sounds like the usual hopping data story
+* packet switches(also called routers) have buffers
+  * many incoming links, lesser outgoing links-> will need to have buffers
+  * during congestion
+* all packets share the full capacity of the link
+* no per communication state (on the link / router / switches level)
+* Benefits:
+  * Efficient use of links
+  * resilience to failures of links
+===Principles, terminology : end to end delay and queueing delay ===
+* propagation delay: time taken for a single bit over a link l at speed c. pd = l / c
+  * doesn't depend on data rate of link. function of speed of propagation and length
+* packetization delay: time btw first to last packet being put on the link(time to put a packet on the link). func of number of bits putting on the link versus the number of bits we *can* put on the link. on a link of fixed rate r, the t_p = p(bits) / r(bits/sec)
+  * only a function of length of packet and the rate at which we can put on link
+* end to end delay: 
+  * [[file:./end_to_end_delay.png]]
+  * It's basically a summation of time taken to put on the link and time taken to propagate on the link over the links that form the path
+  * Internet routers store and forward. So it waits until it gets the whole packet.
+    * It could cut-through, without storing, but generally it doesn't
+  * but it's not as simple as that. When multiple packets contend on a single link, it queues and serves on a first come basis. This introduces queueing delay. It's a function of time.Q(t). It's non -deterministic
+===Playback buffer===
+* coping with queueing delay(not all(websites) some require,realtime apps (youtube, skype))
+* Youtube buffering is a case of playback buffer
+* How much we want to accumulate as buffer? 
+* Interestingly the prof refers to the time spent on the links as buffer time as well. This has lower and upper(notso useful) bounds
+* [[file:./playback_buffer.png]]
+  * The vertical yellow bar shows the size of the buffer at that Point in time
+===Packet switching: simple queue models===
+* [[file:./simple_queue_model.png]]
+* confused / could not understand teh average queue occupancy calculation
+  * It seems it's mostly like 0.1 * (1000-500) / 2 = 25. By 2 is considering the draining till 0.2 s. then 0.2* 25 + 0.8 * 0 = 5
+* why should we break message down into small packets?
+  * Increased concurrency(pipelining effect)
+  * The packetization dealy is directly proportional to the size of the packet
+* On a realtime case, one can get away with lesser egress rate becuase of statistical multiplexing. Meaning the chance that all ingresses are peak at the same time are low and buffering/ losses can occur at those times. Otherwise you can getaway with lesser output /draining rate
+===Useful queue properties===
+* Burstiness increases delay
+  * Shows an example with ingress:1packet/s and egress 1packet/s and how queue size varies between 0 and 1
+    * Increasing burstiness but with same rate, 5 packets at t0 repeating every five seconds, the rate is same, but queue size varies from zero to five.
+* determinism minimizes delay(random arrivals wait longer than periodic arrivals)
+* Little's result
+  * For a given average arrival rate (lambda), average queue size L, the average delay d
+    * `lambda * delay = L` assuming nothing is lost or dropped
+* Poisson process
+  * Modelling aggregation of *many* independent arrival events. Individual events are *not* poisson
+  * Expectation of number of arrivals in interval t = lambda * t (where lambda = arrival rate)
+  * successive interarrival times are independent (not bursty)
+* M/M/1 queue - 
+  * markovian arrival process - poisson, markovian service process is exponential,1 server
+    * widely used 
+==Packet Switching - Practice: Switching and Forwarding (1)==
+* three main stages
+  * lookup the address(dest) using forwarding table
+  * update the header(TTL,checksum)
+  * queue the packet
+* can have multiple inputs and multiple outputs
+* Ethernet switch: the typical routing idea based on table and broadcast if not
+* Internet router:
+  * Think its above ethernet layer(not sure)
+  * Does ttl decrement, update checksum
+  * makes request to next hop (assuming ethernet does all its job then)
+* Basic operations:
+  * Lookup address
+  * switching: choosing the correct egress port among many
+===lookup address===
+* ethernet swtich: match ethernet address with which port it has to use
+* ip router: match destination ip(longest prefix match) with ip addr of the interface of the next router. Resolves that ip into destination ethernet dest addr of that interface.
+* explains longest matching prefix
+  * Implementation is using a binary trie
+  * [[file:./binary_tries.png]]
+  * other way is to use dedicated hardware called TCAM
+* Generalized packet switch table model is | match | and | action| columns
+==Packet Switching - Practice: Switching and Forwarding (2)==
+* How packets are switched to correct egress port
+* [[file:./output_switch.png]]
+  * Worst case all inputs(N) route to same output, requiring NR as the queue per egress. This is not ideal (due to size and speed)
+* alternative is to use input queued switch.
+  * [[file:./input_queued_switch.png]]. Reduction to 2R. More scalable
+  * catch: head of line blocking
+    * One input purely red
+    * other input has head red, blocks becuase output is busy due to above input.
+      * causes delay / blocking of other coloured inputs
+      * Mainly because single buffer queue for all inputs
+    * solution: virtual output queues: separate queues for each output
+* throughput comparison
+  * OQ switch higher
+  * IQ (head of line blocking) = 58% of OQ
+  * VOQ close to OQ
+    * analogy to different lanes and turning actions possible on traffic signals
+==Packet Switching - Principles: Rate guarantees==
+* 
+==Side notes / assumption==
+* IP doesn't have ports
+* Ports are required to distinguish which application to deliver data to
+* UDP/ TCP have a notion of ports, thereby capable of delivering data to applications
