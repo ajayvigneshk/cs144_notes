@@ -434,6 +434,44 @@
   * calculates fixed delays(prop, packetization) to get the acceptable Queueing delay
   * used that and the rate of arrival to get the buffer size
 * All the above is rarely used in practice(WTF!)
+==Congestion control==
+=== intro ===
+* One of the main functions of TCP
+===Basic ideas===
+* 
+== Applications ==
+===NAT(basics)===
+* Sort of hinted at violating e2e principle: adding smarts in the network at the cost of headaches.
+* NAT: sits between you and internet
+  * has it's own ip address for public internet
+  * when a packet comes from its internal address, rewrites such that it comes from its public interface
+  * internal ip ->  nat ip -> destination
+  * How does it know to which internal ip it has to forward?
+    * Turns out it has to rewrite not just the ip but also the port(since multiple machines can use the same port number)
+    * In this case since mapping between nat ip,port and source(NATTed) machine ip and port are maintained and used
+    * The allocation of port on the NAT is lazy / dynamic
+    * All of this is true wrt TCP
+  * Advantages:
+    * all wireless home routers are NATs
+    * security, hard to open connections targeting the machines behind
+===Type of NATs===
+* questions:
+  * what packets are allowed the NAT traversal?
+  * How and when does NAT assign mappings?
+====full cone NAT====
+* Least restrictive in terms of packets allowed to traverse
+====restricted cone NAT====
+* restricted based on the remote source address(server),other ports are still allowed
+* when setting up mapping, includes destination info
+* will not allow a packet from a different destination server targeting same NAT ip, port
+====port restricted NAT ====
+* as per the name
+====symmetric NAT====
+* port restricted, and also
+  * generates different NAT port for different destination even from the same source ip, port behind NAT
+* Hairpinning problem
+  * What happens if a machine under the same NAT sends packet to a NAT port established pair, with the NAT not rewriting the source address.
+  * Refer to video for better example
 ==recap(packet switching)==
 ==Side notes / assumption==
 * IP doesn't have ports
