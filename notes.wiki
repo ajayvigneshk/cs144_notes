@@ -398,8 +398,45 @@
   * VOQ close to OQ
     * analogy to different lanes and turning actions possible on traffic signals
 ==Packet Switching - Principles: Rate guarantees==
-* 
+* consequences of output being a FIFO queue
+  * Encourages bad behaviour, permits a hogger to consume maximum share
+  * Doesn't respect priority / urgency of packets
+  * The maximum wait time on queue is a fraction of queue size to output rate.
+* Two alternatives
+  * Strict priorities
+  * rate guarantees
+===strict priorities===
+* two queues high and low based on say ToS headers for IP
+* scheduler serves low priority queue only if the high priority queue is empty
+* can starve out low priority traffic
+===weighted priorities===
+* take weights 2 and 1. the split up is 66% and 33%
+* problems: packet size is variable(so honouring weights is harder)
+* It's possible to calculate the starting and finishing times of packets arriving and departing on queue. On a general level, `finishing time = starting time + length of packet / weight`. Then for each queue, the  one with the lowest finishing time is chosen
+* scheme famously called WFQ(waiter fair queue)
+==Packet Switching - Principles: Delay Guarantees (revised)==
+* Getting to know the upper bound of the queuing delay.
+  * How(intuition)?
+  * Delay is `ratio of buffer size to rate`. rate is `ratio of queue weight to sum of all queue weights`.
+  * Specify the weight, buffer size to control rate.
+* problem: Prevent buffer overflow to ensure guarantee
+* [[file:./queue.png]]
+  * vertical bar denotes buffer size as a function of time
+  * horizontal bar denotes the delay of data as a function of time.
+* [[file:./one_queue.png]]
+  * The above image establishes an upper bound on Arrival rate as a function of buffer size and departure rate.(all are functions oftime)
+* Same concept rebranded as sigma rho regulatio
+  * [[file:./sigma_rho.png]]
+* leaky bucket regulator on source to do the actual constraining
+  * [[file:./leaky_bucket_regulator.png]]
+* there's a separate protocol called RSVP that's used to set these up these sigma, rho, buffer size of WFQ on the network.RFC 2205
+* Shows a worked example of arriving at the buffer size.
+  * calculates fixed delays(prop, packetization) to get the acceptable Queueing delay
+  * used that and the rate of arrival to get the buffer size
+* All the above is rarely used in practice(WTF!)
+==recap(packet switching)==
 ==Side notes / assumption==
 * IP doesn't have ports
 * Ports are required to distinguish which application to deliver data to
 * UDP/ TCP have a notion of ports, thereby capable of delivering data to applications
+* 
